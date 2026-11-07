@@ -28,6 +28,16 @@ class DiscordRpcService {
   static const _channel = MethodChannel('com.chronostudio.resonance/discord_rpc');
   bool _isInitialized = false;
   bool get isInitialized => _isInitialized;
+  bool _isPresenceConfirmed = false;
+  VoidCallback? onPresenceStateChanged;
+
+  /// True when the device is online and the native Discord bridge has actively
+  /// accepted/confirmed the current presence payload.
+  bool get isPresenceActive =>
+      _isInitialized &&
+      _isPresenceConfirmed &&
+      _ref.read(networkConnectivityProvider).isOnline;
+
   String? _lastTrackId;
   String _currentAlbumArtKey = 'resonance_logo';
 
@@ -591,11 +601,16 @@ class DiscordRpcService {
 
   void _handleChannelError(Object error) {
     debugPrint('[DiscordRPC] Channel error ($error) — resetting RPC connection state');
+    final wasConfirmed = _isPresenceConfirmed;
     _isInitialized = false;
+    _isPresenceConfirmed = false;
     _lastTrackId = null;
     _lastPlayingState = false;
     _currentAlbumArtKey = 'resonance_logo';
     _resetLastSentCache();
+    if (wasConfirmed) {
+      onPresenceStateChanged?.call();
+    }
   }
 
   void _sendActivity(
@@ -667,7 +682,7 @@ class DiscordRpcService {
     );
 
     try {
-      await _channel.invokeMethod('updatePresence', {
+      final ok = await _channel.invokeMethod<bool>('updatePresence', {
         'name': 'Resonance',
         'type': 'listening',
         'details': details,
@@ -686,16 +701,61 @@ class DiscordRpcService {
         'button2Label': showButtons ? 'Play on Resonance' : null,
         'button2Url': showButtons ? _ref.read(appConfigProvider).releasesUrl : null,
       });
+      final confirmed = ok ?? true;
+      final changed = _isPresenceConfirmed != confirmed;
+      _isPresenceConfirmed = confirmed;
+      if (!confirmed) {
+        // Reset dedup cache so when Discord Desktop opens later, the next pulse re-sends!
+        _resetLastSentCache();
+      }
+      if (changed) {
+        onPresenceStateChanged?.call();
+      }
     } catch (e) {
       _handleChannelError(e);
     }
   }
 
+  /// Syncs a remote host's track to Discord RPC from the mobile client when the
+  /// desktop host is offline or its local Discord Desktop app is closed.
+  Future<void> syncRemoteTrackPresence(
+    MediaItem? track, {
+    required Duration position,
+    required Duration duration,
+    required bool isPlaying,
+  }) async {
+    if (!_ref.read(networkConnectivityProvider).isOnline) return;
+    if (track == null) {
+      clearPresence();
+      return;
+    }
+
+    // If the track lacks an HTTP thumbnail (e.g. local LAN URL http://192.168.x.x),
+    // resolve a public iTunes artwork URL first so Discord's servers can render it!
+    MediaItem effectiveTrack = track;
+    final hasPublicHttpThumb = track.thumbnailUrl != null &&
+        track.thumbnailUrl!.startsWith('http') &&
+        !track.thumbnailUrl!.contains('/art/');
+    if (!hasPublicHttpThumb) {
+      final resolvedUrl = await resolveArtworkOnly(track);
+      if (resolvedUrl != null && resolvedUrl.isNotEmpty) {
+        effectiveTrack = track.copyWith(thumbnailUrl: resolvedUrl);
+      }
+    }
+
+    await updatePresence(effectiveTrack, position, duration, isPlaying);
+  }
+
   void clearPresence() {
+    final wasConfirmed = _isPresenceConfirmed;
+    _isPresenceConfirmed = false;
     _lastTrackId = null;
     _lastPlayingState = false;
     _currentAlbumArtKey = 'resonance_logo';
     _resetLastSentCache();
+    if (wasConfirmed) {
+      onPresenceStateChanged?.call();
+    }
     if (!_isInitialized) return;
     unawaited(
       _channel.invokeMethod('clearPresence').catchError((e) {

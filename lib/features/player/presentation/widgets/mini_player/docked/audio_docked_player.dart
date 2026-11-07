@@ -8,17 +8,22 @@ import 'package:resonance/features/player/presentation/widgets/mini_player/docke
 import 'package:resonance/features/player/presentation/widgets/mini_player/docked/components/audio_extra_actions.dart';
 import 'package:resonance/features/player/presentation/widgets/mini_player/docked/components/audio_progress_bar.dart';
 
-// Import NowPlayingScreen notifier (this is typically in the same or separate provider file depending on architecture)
-// Since we isolated things, I'll rely on the global navigation or a similar provider.
 import 'package:resonance/core/domain/models/media_item.dart';
 import 'package:resonance/core/providers/overlay_provider.dart';
+import 'package:resonance/features/connect/application/connect_client_notifier.dart';
 
 class AudioDockedPlayer extends ConsumerWidget {
   const AudioDockedPlayer({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final displayTrack = ref.watch(audioProvider.select((s) => s.currentTrack));
+    final localTrack = ref.watch(audioProvider.select((s) => s.currentTrack));
+    final isDockedRemote = ref.watch(isDockedBarRemoteProvider);
+    final remoteTrack = ref.watch(
+      connectClientProvider.select((s) => s.remoteSync?.currentTrack),
+    );
+    final displayTrack =
+        isDockedRemote ? (remoteTrack ?? localTrack) : localTrack;
 
     if (displayTrack == null) return const SizedBox.shrink();
 
@@ -35,16 +40,23 @@ class AudioDockedPlayer extends ConsumerWidget {
         cursor: SystemMouseCursors.click,
         child: GestureDetector(
           onTap: () {
+            ref.read(dualOverlayTargetProvider.notifier).setTarget(
+                  isDockedRemote
+                      ? PlaybackTarget.remote
+                      : PlaybackTarget.local,
+                );
             ref.read(nowPlayingOverlayProvider.notifier).toggle();
           },
           child: Container(
             height: 72,
             decoration: BoxDecoration(
-              borderRadius: isWide ? BorderRadius.circular(22) : BorderRadius.zero,
+              borderRadius:
+                  isWide ? BorderRadius.circular(22) : BorderRadius.zero,
               boxShadow: isWide
                   ? [
                       BoxShadow(
-                        color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.12),
+                        color: Colors.black
+                            .withValues(alpha: isDark ? 0.35 : 0.12),
                         blurRadius: 16,
                         offset: const Offset(0, 6),
                       ),
@@ -109,7 +121,8 @@ class _DockedControlsBar extends StatelessWidget {
           ),
           child: LayoutBuilder(
             builder: (context, constraints) {
-              final bool isDesktop = AppBreakpoints.isWideWidth(constraints.maxWidth);
+              final bool isDesktop =
+                  AppBreakpoints.isWideWidth(constraints.maxWidth);
 
               return Row(
                 children: [
@@ -169,7 +182,3 @@ class _DockedControlsBar extends StatelessWidget {
     );
   }
 }
-
-
-
-

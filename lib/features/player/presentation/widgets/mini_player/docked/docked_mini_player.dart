@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:resonance/features/connect/application/connect_client_notifier.dart';
 import 'package:resonance/features/player/application/providers/audio_provider.dart';
 import 'package:resonance/features/player/presentation/widgets/mini_player/docked/audio_docked_player.dart';
 
@@ -8,9 +9,14 @@ class DockedMiniPlayer extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final hasTrack = ref.watch(audioProvider.select((s) => s.currentTrack != null));
+    final hasLocalTrack =
+        ref.watch(audioProvider.select((s) => s.currentTrack != null));
+    final isDockedRemote = ref.watch(isDockedBarRemoteProvider);
+    final hasRemoteTrack = ref.watch(
+      connectClientProvider.select((s) => s.remoteSync?.currentTrack != null),
+    );
 
-    if (!hasTrack) {
+    if (!hasLocalTrack && !(isDockedRemote && hasRemoteTrack)) {
       return const SizedBox.shrink();
     }
 

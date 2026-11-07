@@ -27,6 +27,34 @@ class MainActivity : AudioServiceActivity() {
     private val poTokenGenerator by lazy { PoTokenGenerator(applicationContext) }
     private var discordRpcBridge: DiscordRpcBridge? = null
 
+    private val multicastLock: WifiManager.MulticastLock? by lazy {
+        try {
+            val wm = applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
+            wm?.createMulticastLock("Resonance::ConnectMulticastLock")?.apply {
+                setReferenceCounted(false)
+            }
+        } catch (e: Throwable) {
+            Log.w("ResonanceMain", "Failed to create MulticastLock: ${e.message}")
+            null
+        }
+    }
+
+    private fun updateMulticastLock(active: Boolean) {
+        try {
+            if (active) {
+                if (multicastLock?.isHeld == false) {
+                    multicastLock?.acquire()
+                }
+            } else {
+                if (multicastLock?.isHeld == true) {
+                    multicastLock?.release()
+                }
+            }
+        } catch (e: Throwable) {
+            Log.w("ResonanceMain", "updateMulticastLock($active) error: ${e.message}")
+        }
+    }
+
     private val wakeLock: PowerManager.WakeLock? by lazy {
         try {
             val pm = applicationContext.getSystemService(Context.POWER_SERVICE) as? PowerManager
@@ -116,6 +144,11 @@ class MainActivity : AudioServiceActivity() {
         
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
             when (call.method) {
+                "setMulticastLock" -> {
+                    val active = call.argument<Boolean>("active") ?: false
+                    updateMulticastLock(active)
+                    result.success(true)
+                }
                 "setPlaybackLocks" -> {
                     val active = call.argument<Boolean>("active") ?: false
                     updatePlaybackLocks(active)
@@ -206,6 +239,7 @@ class MainActivity : AudioServiceActivity() {
 
     override fun onDestroy() {
         updatePlaybackLocks(false)
+        updateMulticastLock(false)
         discordRpcBridge?.destroy()
         discordRpcBridge = null
         super.onDestroy()

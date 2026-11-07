@@ -15,6 +15,9 @@ import 'package:resonance/features/playlist/application/playlist_provider.dart';
 import 'package:resonance/features/lyrics/application/lyrics_provider.dart';
 import '../widgets/player_cards.dart';
 import '../widgets/mini_player/shared/audio_settings_sheet.dart';
+import 'package:resonance/features/connect/application/connect_client_notifier.dart';
+import 'package:resonance/features/connect/presentation/sheets/connect_devices_sheet.dart';
+import 'package:resonance/features/connect/presentation/widgets/connect_remote_player_banner.dart';
 
 class NowPlayingScreen extends ConsumerWidget {
   const NowPlayingScreen({super.key});
@@ -29,7 +32,12 @@ class NowPlayingScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final track = ref.watch(audioProvider.select((s) => s.currentTrack));
+    final localTrack = ref.watch(audioProvider.select((s) => s.currentTrack));
+    final isRemoteTarget = ref.watch(isOverlayRemoteTargetProvider);
+    final remoteTrack = ref.watch(
+      connectClientProvider.select((s) => s.remoteSync?.currentTrack),
+    );
+    final track = isRemoteTarget ? (remoteTrack ?? localTrack) : localTrack;
     final isAndroid =
         Theme.of(context).platform == TargetPlatform.android ||
         Platform.isAndroid;
@@ -45,13 +53,19 @@ class NowPlayingScreen extends ConsumerWidget {
             children: [
               NowPlayingTopBar(
                 track: track,
-                onClose: () =>
-                    ref.read(nowPlayingOverlayProvider.notifier).setVisible(false),
+                onClose: () => ref
+                    .read(nowPlayingOverlayProvider.notifier)
+                    .setVisible(false),
                 onQueue: () =>
                     ref.read(queueOverlayProvider.notifier).toggle(),
                 onMediaActions: () => _showMediaActions(context, track),
                 onAudioSettings: () => _showAudioSettings(context),
               ),
+              if (isRemoteTarget)
+                const Padding(
+                  padding: EdgeInsets.only(bottom: 6),
+                  child: ConnectRemotePlayerBanner(compact: true),
+                ),
               Expanded(
                 child: _NowPlayingBody(track: track, isAndroid: isAndroid),
               ),
@@ -100,6 +114,7 @@ class _NowPlayingBody extends StatelessWidget {
 
     return LayoutBuilder(
       builder: (context, constraints) {
+        final isWideViewport = AppBreakpoints.isWide(context);
         final isCompact = AppBreakpoints.isCompactWidth(constraints.maxWidth);
         final padding = (!isAndroid && isCompact)
             ? const EdgeInsets.only(left: 16, right: 16, top: 12, bottom: 48)
@@ -112,7 +127,7 @@ class _NowPlayingBody extends StatelessWidget {
           child: LayoutBuilder(
             builder: (context, innerConstraints) {
               final totalWidth = innerConstraints.maxWidth;
-              if (isAndroid) {
+              if (isAndroid && !isWideViewport) {
                 return _AndroidMobileLayout(track: track);
               }
               return isCompact
@@ -235,6 +250,14 @@ class NowPlayingTopBar extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 4),
+          ReusableHoverIconButton(
+            icon: UIcons.regular.devices,
+            iconSize: 20,
+            padding: 6,
+            tooltip: 'Resonance Connect',
+            color: iconColor,
+            onTap: () => ConnectDevicesSheet.show(context),
+          ),
           ReusableHoverIconButton(
             icon: UIcons.regular.list_music,
             iconSize: 20,
@@ -603,7 +626,12 @@ class _FloatingLyricsPreviewSheet extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final lyricsState = ref.watch(lyricsProvider);
-    final pos = ref.watch(audioProvider.select((s) => s.position));
+    final isRemoteTarget = ref.watch(isOverlayRemoteTargetProvider);
+    final localPos = ref.watch(audioProvider.select((s) => s.position));
+    final remotePos = ref.watch(
+      connectClientProvider.select((s) => s.interpolatedPosition),
+    );
+    final pos = isRemoteTarget ? remotePos : localPos;
     final theme = Theme.of(context);
     final isLight = theme.brightness == Brightness.light;
 

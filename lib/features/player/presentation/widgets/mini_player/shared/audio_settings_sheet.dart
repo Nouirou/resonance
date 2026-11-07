@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:resonance/core/utils/uicons.dart';
 import 'package:resonance/core/widgets/widgets.dart';
+import 'package:resonance/features/connect/application/connect_client_notifier.dart';
 import 'package:resonance/features/player/application/providers/audio_provider.dart';
 import 'package:resonance/features/player/presentation/widgets/equalizer_sheet.dart';
 
@@ -50,7 +51,8 @@ class _AudioSlidersBento extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHighest.withValues(alpha: isDark ? 0.35 : 0.5),
+        color: colorScheme.surfaceContainerHighest
+            .withValues(alpha: isDark ? 0.35 : 0.5),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: colorScheme.outline.withValues(alpha: isDark ? 0.1 : 0.06),
@@ -89,19 +91,28 @@ class _VolumeSlider extends ConsumerStatefulWidget {
 class _VolumeSliderState extends ConsumerState<_VolumeSlider> {
   double _prevVolume = 100.0;
 
-  void _toggleMute(double currentVolume) {
+  void _toggleMute(double currentVolume, bool isRemoteTarget) {
+    final targetVol =
+        currentVolume > 0 ? 0.0 : (_prevVolume > 0 ? _prevVolume : 100.0);
     if (currentVolume > 0) {
       _prevVolume = currentVolume;
-      ref.read(audioProvider.notifier).setVolume(0);
+    }
+    if (isRemoteTarget) {
+      ref.read(connectClientProvider.notifier).setVolume(targetVol);
     } else {
-      ref.read(audioProvider.notifier).setVolume(_prevVolume > 0 ? _prevVolume : 100);
+      ref.read(audioProvider.notifier).setVolume(targetVol);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final volume = ref.watch(audioProvider.select((s) => s.volume));
+    final isRemoteTarget = ref.watch(isOverlayRemoteTargetProvider);
+    final localVolume = ref.watch(audioProvider.select((s) => s.volume));
+    final remoteVolume = ref.watch(
+      connectClientProvider.select((s) => s.remoteSync?.volume ?? 100.0),
+    );
+    final volume = isRemoteTarget ? remoteVolume : localVolume;
 
     final IconData volumeIcon = volume == 0
         ? UIcons.regular.volume_off
@@ -116,7 +127,7 @@ class _VolumeSliderState extends ConsumerState<_VolumeSlider> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             InkWell(
-              onTap: () => _toggleMute(volume),
+              onTap: () => _toggleMute(volume, isRemoteTarget),
               borderRadius: BorderRadius.circular(6),
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 2),
@@ -144,7 +155,7 @@ class _VolumeSliderState extends ConsumerState<_VolumeSlider> {
               ),
             ),
             InkWell(
-              onTap: () => _toggleMute(volume),
+              onTap: () => _toggleMute(volume, isRemoteTarget),
               borderRadius: BorderRadius.circular(8),
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -155,7 +166,7 @@ class _VolumeSliderState extends ConsumerState<_VolumeSlider> {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
-                  '${volume.round()}%',
+                  volume == 0 ? 'Muted' : '${volume.toInt()}%',
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.bold,
@@ -180,8 +191,10 @@ class _VolumeSliderState extends ConsumerState<_VolumeSlider> {
               child: SliderTheme(
                 data: SliderTheme.of(context).copyWith(
                   trackHeight: 4,
-                  thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
-                  overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
+                  thumbShape:
+                      const RoundSliderThumbShape(enabledThumbRadius: 7),
+                  overlayShape:
+                      const RoundSliderOverlayShape(overlayRadius: 14),
                   tickMarkShape: SliderTickMarkShape.noTickMark,
                 ),
                 child: MouseRegion(
@@ -193,7 +206,11 @@ class _VolumeSliderState extends ConsumerState<_VolumeSlider> {
                     activeColor: colorScheme.primary,
                     onChanged: (val) {
                       if (val > 0) _prevVolume = val;
-                      ref.read(audioProvider.notifier).setVolume(val);
+                      if (isRemoteTarget) {
+                        ref.read(connectClientProvider.notifier).setVolume(val);
+                      } else {
+                        ref.read(audioProvider.notifier).setVolume(val);
+                      }
                     },
                   ),
                 ),
@@ -219,7 +236,12 @@ class _PlaybackSpeedSlider extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final colorScheme = Theme.of(context).colorScheme;
-    final speed = ref.watch(audioProvider.select((s) => s.speed));
+    final isRemoteTarget = ref.watch(isOverlayRemoteTargetProvider);
+    final localSpeed = ref.watch(audioProvider.select((s) => s.speed));
+    final remoteSpeed = ref.watch(
+      connectClientProvider.select((s) => s.remoteSync?.playbackRate ?? 1.0),
+    );
+    final speed = (isRemoteTarget ? remoteSpeed : localSpeed).clamp(0.5, 2.0);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -266,8 +288,10 @@ class _PlaybackSpeedSlider extends ConsumerWidget {
               child: SliderTheme(
                 data: SliderTheme.of(context).copyWith(
                   trackHeight: 4,
-                  thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
-                  overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
+                  thumbShape:
+                      const RoundSliderThumbShape(enabledThumbRadius: 7),
+                  overlayShape:
+                      const RoundSliderOverlayShape(overlayRadius: 14),
                 ),
                 child: MouseRegion(
                   cursor: SystemMouseCursors.click,
@@ -277,9 +301,9 @@ class _PlaybackSpeedSlider extends ConsumerWidget {
                     max: 2.0,
                     divisions: 15,
                     activeColor: colorScheme.primary,
-                    onChanged: (val) => ref
-                        .read(audioProvider.notifier)
-                        .setSpeed(val),
+                    onChanged: (val) => isRemoteTarget
+                        ? ref.read(connectClientProvider.notifier).setSpeed(val)
+                        : ref.read(audioProvider.notifier).setSpeed(val),
                   ),
                 ),
               ),
@@ -304,7 +328,12 @@ class _PitchSlider extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final colorScheme = Theme.of(context).colorScheme;
-    final pitch = ref.watch(audioProvider.select((s) => s.pitch));
+    final isRemoteTarget = ref.watch(isOverlayRemoteTargetProvider);
+    final localPitch = ref.watch(audioProvider.select((s) => s.pitch));
+    final remotePitch = ref.watch(
+      connectClientProvider.select((s) => s.remoteSync?.pitch ?? 0.0),
+    );
+    final pitch = (isRemoteTarget ? remotePitch : localPitch).clamp(-12.0, 12.0);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -351,8 +380,10 @@ class _PitchSlider extends ConsumerWidget {
               child: SliderTheme(
                 data: SliderTheme.of(context).copyWith(
                   trackHeight: 4,
-                  thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
-                  overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
+                  thumbShape:
+                      const RoundSliderThumbShape(enabledThumbRadius: 7),
+                  overlayShape:
+                      const RoundSliderOverlayShape(overlayRadius: 14),
                 ),
                 child: MouseRegion(
                   cursor: SystemMouseCursors.click,
@@ -362,9 +393,9 @@ class _PitchSlider extends ConsumerWidget {
                     max: 12.0,
                     divisions: 24,
                     activeColor: colorScheme.primary,
-                    onChanged: (val) => ref
-                        .read(audioProvider.notifier)
-                        .setPitch(val),
+                    onChanged: (val) => isRemoteTarget
+                        ? ref.read(connectClientProvider.notifier).setPitch(val)
+                        : ref.read(audioProvider.notifier).setPitch(val),
                   ),
                 ),
               ),
@@ -401,8 +432,10 @@ class _EqualizerButtonState extends State<_EqualizerButton> {
     final colorScheme = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
 
-    final baseBg = colorScheme.surfaceContainerHighest.withValues(alpha: isDark ? 0.35 : 0.5);
-    final hoverBg = colorScheme.surfaceContainerHighest.withValues(alpha: isDark ? 0.65 : 0.85);
+    final baseBg = colorScheme.surfaceContainerHighest
+        .withValues(alpha: isDark ? 0.35 : 0.5);
+    final hoverBg = colorScheme.surfaceContainerHighest
+        .withValues(alpha: isDark ? 0.65 : 0.85);
 
     return MouseRegion(
       cursor: SystemMouseCursors.click,
@@ -454,7 +487,8 @@ class _EqualizerButtonState extends State<_EqualizerButton> {
                     Text(
                       'Custom 9-band frequency & presets',
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
+                        color:
+                            colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
                         fontSize: 11,
                       ),
                     ),
@@ -473,4 +507,3 @@ class _EqualizerButtonState extends State<_EqualizerButton> {
     );
   }
 }
-

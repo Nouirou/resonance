@@ -12,6 +12,7 @@ class DiscordRpcManager {
   bool Initialize(const std::string& app_id);
   bool UpdatePresence(const flutter::EncodableMap& data);
   bool ClearPresence();
+  bool IsPresenceConfirmed() const;
   void Dispose();
   void Tick();
 

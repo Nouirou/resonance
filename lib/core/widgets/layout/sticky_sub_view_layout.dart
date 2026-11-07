@@ -33,7 +33,7 @@ class StickySubViewLayout extends StatelessWidget {
           width: double.infinity,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
-            color: theme.scaffoldBackgroundColor,
+            color: Colors.transparent,
             border: Border(
               bottom: BorderSide(
                 color: theme.dividerColor.withValues(alpha: 0.06),

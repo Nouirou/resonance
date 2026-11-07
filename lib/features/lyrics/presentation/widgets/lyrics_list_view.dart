@@ -7,7 +7,6 @@ import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:silky_scroll/silky_scroll.dart';
 import '../../application/lyrics_provider.dart';
 import '../../application/lyrics_translation_provider.dart';
-import '../../../player/application/providers/audio_provider.dart';
 import 'word_synced_lyric_row.dart';
 import '../../../../core/theme/theme_provider.dart';
 import '../../../../core/theme/fluent_scroll_behavior.dart';
@@ -96,7 +95,7 @@ class _LyricsListViewState extends ConsumerState<LyricsListView> {
     final activeOpacity = ref.watch(lyricsActiveOpacityProvider);
     final inactiveOpacity = ref.watch(lyricsInactiveOpacityProvider);
 
-    final track = ref.watch(audioProvider.select((s) => s.currentTrack));
+    final track = ref.watch(activeOverlayTrackProvider);
     final trackId = track?.id ?? track?.path;
     final isNewTrack = trackId != _lastTrackId;
     if (isNewTrack) {

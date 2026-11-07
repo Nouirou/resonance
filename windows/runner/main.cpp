@@ -27,10 +27,11 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
       ::PostMessage(existing_hwnd, wm_show_instance, 0, 0);
 
       // Forward command-line arguments to existing instance via WM_COPYDATA
-      if (command_line && wcslen(command_line) > 0) {
+      const size_t cmd_len = command_line ? wcsnlen_s(command_line, 32768) : 0;
+      if (cmd_len > 0 && cmd_len < 32768) {
         COPYDATASTRUCT cds;
         cds.dwData = 1;  // 1 = command line string
-        cds.cbData = static_cast<DWORD>((wcslen(command_line) + 1) * sizeof(wchar_t));
+        cds.cbData = static_cast<DWORD>((cmd_len + 1) * sizeof(wchar_t));
         cds.lpData = static_cast<PVOID>(command_line);
         ::SendMessage(existing_hwnd, WM_COPYDATA, reinterpret_cast<WPARAM>(existing_hwnd), reinterpret_cast<LPARAM>(&cds));
       }

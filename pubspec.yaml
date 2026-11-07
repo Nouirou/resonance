@@ -64,6 +64,13 @@ dependencies:
   audio_metadata_reader: ^1.6.0
   flutter_local_notifications: ^22.0.1
   desktop_drop: ^0.7.1
+  shelf: ^1.4.3
+  shelf_web_socket: ^3.0.0
+  shelf_router: ^1.1.5
+  web_socket_channel: ^3.0.3
+  bonsoir: ^7.0.0
+  qr_flutter: ^4.1.0
+  mobile_scanner: ^7.0.0
 
 
 dev_dependencies:

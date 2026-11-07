@@ -43,7 +43,7 @@ $fileSize = $fileItem.Length
 $lineCount = 0
 $reader = [System.IO.File]::OpenText($LogFile)
 try {
-    while ($reader.ReadLine() -ne $null) { $lineCount++ }
+    while ($null -ne $reader.ReadLine()) { $lineCount++ }
 } finally {
     $reader.Close()
 }

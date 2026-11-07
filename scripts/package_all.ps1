@@ -98,7 +98,7 @@ if ($Platform -eq "All" -or $Platform -eq "Windows") {
     }
     $global:LASTEXITCODE = 0
     & "$PSScriptRootDirectory\package_windows.ps1" @winParams
-    if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne $null) {
+    if ($null -ne $LASTEXITCODE -and $LASTEXITCODE -ne 0) {
         throw "Windows packaging failed with exit code $LASTEXITCODE"
     }
 }
@@ -116,7 +116,7 @@ if ($Platform -eq "All" -or $Platform -eq "Android") {
     }
     $global:LASTEXITCODE = 0
     & "$PSScriptRootDirectory\package_android.ps1" @androidParams
-    if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne $null) {
+    if ($null -ne $LASTEXITCODE -and $LASTEXITCODE -ne 0) {
         throw "Android packaging failed with exit code $LASTEXITCODE"
     }
 }

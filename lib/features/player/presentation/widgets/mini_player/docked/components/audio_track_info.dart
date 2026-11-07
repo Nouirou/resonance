@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:resonance/features/library/data/models/media_item.dart';
 
 import 'package:resonance/core/utils/formatters.dart';
+import 'package:resonance/features/connect/application/connect_client_notifier.dart';
 import 'package:resonance/features/player/application/providers/audio_provider.dart';
 import 'package:resonance/core/providers/overlay_provider.dart';
 
@@ -28,82 +29,95 @@ class AudioTrackInfo extends ConsumerWidget {
       message: tooltipMessage,
       waitDuration: const Duration(milliseconds: 400),
       child: Row(
-      children: [
-        // Album Art with Hero Animation
-        Padding(
-          padding: const EdgeInsets.only(left: 16),
-          child: Hero(
-            tag: 'mini_artwork_${track.id ?? track.hashCode}',
-            child: MediaArtworkWidget(
-              item: track,
-              width: 48,
-              height: 48,
-              borderRadius: 4,
+        children: [
+          // Album Art with Hero Animation
+          Padding(
+            padding: const EdgeInsets.only(left: 16),
+            child: Hero(
+              tag: 'mini_artwork_${track.id ?? track.hashCode}',
+              child: MediaArtworkWidget(
+                item: track,
+                width: 48,
+                height: 48,
+                borderRadius: 4,
+              ),
             ),
           ),
-        ),
-        const SizedBox(width: 12),
+          const SizedBox(width: 12),
 
-        // Track Info Text
-        Expanded(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Title row — badge directly adjacent to title, auto-scrolling long titles
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Flexible(
-                    fit: FlexFit.loose,
-                    child: ResonanceMarqueeText(
-                      text: track.title,
-                      style: const TextStyle(fontWeight: FontWeight.bold),
+          // Track Info Text
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Title row — badge directly adjacent to title, auto-scrolling long titles
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Flexible(
+                      fit: FlexFit.loose,
+                      child: ResonanceMarqueeText(
+                        text: track.title,
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    if (track.isStreaming) ...[
+                      const SizedBox(width: 6),
+                      TrackTypeChip(isVideo: track.type == 'video'),
+                    ],
+                  ],
+                ),
+                Text(
+                  track.artist ?? 'Unknown Artist',
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    fontSize: 12,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                if (!isDesktop)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4.0),
+                    child: Consumer(
+                      builder: (context, ref, _) {
+                        final isRemote = ref.watch(isDockedBarRemoteProvider);
+                        final localPosSec = ref.watch(
+                          audioProvider.select((s) => s.position.inSeconds),
+                        );
+                        final localDurSec = ref.watch(
+                          audioProvider.select((s) => s.duration.inSeconds),
+                        );
+                        final remotePosSec = ref.watch(
+                          connectClientProvider
+                              .select((s) => s.interpolatedPosition.inSeconds),
+                        );
+                        final remoteDurSec = ref.watch(
+                          connectClientProvider.select(
+                            (s) => (s.remoteSync?.duration ?? Duration.zero)
+                                .inSeconds,
+                          ),
+                        );
+                        final posSec = isRemote ? remotePosSec : localPosSec;
+                        final durSec = isRemote ? remoteDurSec : localDurSec;
+                        return Text(
+                          "${AppFormatters.formatDuration(Duration(seconds: posSec))} / ${AppFormatters.formatDuration(Duration(seconds: durSec))}",
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
+                          ),
+                        );
+                      },
                     ),
                   ),
-                  if (track.isStreaming) ...[
-                    const SizedBox(width: 6),
-                    TrackTypeChip(isVideo: track.type == 'video'),
-                  ],
-                ],
-              ),
-              Text(
-                track.artist ?? 'Unknown Artist',
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  fontSize: 12,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              if (!isDesktop)
-                Padding(
-                  padding: const EdgeInsets.only(top: 4.0),
-                  child: Consumer(
-                    builder: (context, ref, _) {
-                      final posSec = ref.watch(
-                        audioProvider.select((s) => s.position.inSeconds),
-                      );
-                      final durSec = ref.watch(
-                        audioProvider.select((s) => s.duration.inSeconds),
-                      );
-                      return Text(
-                        "${AppFormatters.formatDuration(Duration(seconds: posSec))} / ${AppFormatters.formatDuration(Duration(seconds: durSec))}",
-                        style: TextStyle(
-                          fontSize: 10,
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-            ],
+              ],
+            ),
           ),
-        ),
-      ],
-    ),
+        ],
+      ),
     );
   }
 }

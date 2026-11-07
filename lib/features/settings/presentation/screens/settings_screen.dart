@@ -13,6 +13,9 @@ import '../widgets/downloads_settings_section.dart';
 import '../widgets/support_update_section.dart';
 import '../widgets/about_card.dart';
 import '../widgets/blocked_tracks_section.dart';
+import 'package:resonance/features/connect/presentation/widgets/connect_settings_section.dart';
+import 'package:resonance/features/connect/application/connect_client_notifier.dart';
+import 'package:resonance/features/connect/application/connect_server_notifier.dart';
 import 'package:resonance/features/library/application/blocked_tracks_provider.dart';
 import 'package:resonance/features/dashboard/presentation/widgets/top_navigation_header.dart';
 
@@ -26,6 +29,7 @@ enum SettingsSubView {
   audio,
   storage,
   network,
+  connect,
   blocked,
   help,
   updates,
@@ -148,6 +152,16 @@ class SettingsScreen extends ConsumerWidget {
           ],
         );
 
+      case SettingsSubView.connect:
+        return StickySubViewLayout(
+          key: const ValueKey('settings_subview_connect'),
+          title: 'Resonance Connect',
+          onBack: closeSubView,
+          children: const [
+            ConnectSettingsSection(),
+          ],
+        );
+
       case SettingsSubView.blocked:
         return StickySubViewLayout(
           key: const ValueKey('settings_subview_blocked'),
@@ -172,6 +186,10 @@ class SettingsScreen extends ConsumerWidget {
 
       case SettingsSubView.none:
         final blockedCount = ref.watch(blockedTracksProvider).length;
+        final isRemoteActive = ref.watch(isRemoteControlActiveProvider);
+        final connectedClientsCount = ref.watch(
+          connectServerProvider.select((s) => s.connectedClients.length),
+        );
         return ListView(
           key: const ValueKey('settings_subview_none'),
           physics: const ClampingScrollPhysics(),
@@ -210,6 +228,16 @@ class SettingsScreen extends ConsumerWidget {
               title: 'Storage',
               subtitle: 'Library paths, offline storage & cache cleanup',
               onTap: () => openSubView(SettingsSubView.storage),
+            ),
+            _buildNavigationItem(
+              context,
+              icon: UIcons.regular.devices,
+              title: 'Resonance Connect',
+              subtitle: 'Pair phone & desktop, LAN remote control & trusted devices',
+              badgeText: isRemoteActive
+                  ? 'Active'
+                  : (connectedClientsCount > 0 ? '$connectedClientsCount' : null),
+              onTap: () => openSubView(SettingsSubView.connect),
             ),
             _buildNavigationItem(
               context,

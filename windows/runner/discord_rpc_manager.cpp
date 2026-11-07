@@ -1,6 +1,9 @@
 #include "discord_rpc_manager.h"
 
+#include <windows.h>
+#include <atomic>
 #include <iostream>
+#include <string>
 #include <variant>
 
 #if __has_include(<discordpp/discordpp.h>)
@@ -11,6 +14,19 @@
 #define HAS_DISCORD_SDK 0
 #endif
 
+namespace {
+bool HasActiveDiscordIpcPipe() {
+  for (int i = 0; i < 4; ++i) {
+    std::string pipe_name = "\\\\.\\pipe\\discord-ipc-" + std::to_string(i);
+    DWORD attrs = ::GetFileAttributesA(pipe_name.c_str());
+    if (attrs != INVALID_FILE_ATTRIBUTES) {
+      return true;
+    }
+  }
+  return false;
+}
+}  // namespace
+
 class DiscordRpcManager::Impl {
  public:
   Impl() = default;
@@ -20,6 +36,7 @@ class DiscordRpcManager::Impl {
   std::shared_ptr<discordpp::Client> client_{nullptr};
 #endif
   bool is_initialized_{false};
+  std::atomic<bool> last_presence_confirmed_{false};
 
   bool Initialize(const std::string& app_id) {
 #if HAS_DISCORD_SDK
@@ -46,10 +63,20 @@ class DiscordRpcManager::Impl {
   }
 
   bool UpdatePresence(const flutter::EncodableMap& data) {
-    if (!is_initialized_) return false;
+    if (!is_initialized_) {
+      last_presence_confirmed_ = false;
+      return false;
+    }
+    if (!HasActiveDiscordIpcPipe()) {
+      last_presence_confirmed_ = false;
+      return false;
+    }
 
 #if HAS_DISCORD_SDK
-    if (!client_) return false;
+    if (!client_) {
+      last_presence_confirmed_ = false;
+      return false;
+    }
     try {
       discordpp::Activity activity;
       std::string app_name = "Resonance";
@@ -154,28 +181,39 @@ class DiscordRpcManager::Impl {
         activity.AddButton(b2);
       }
 
-      client_->UpdateRichPresence(activity, [](const discordpp::ClientResult& result) {
+      client_->UpdateRichPresence(activity, [this](const discordpp::ClientResult& result) {
         if (!result.Successful()) {
+          last_presence_confirmed_ = false;
           std::cerr << "[DiscordRpcManager] UpdateRichPresence unconfirmed" << std::endl;
+        } else {
+          last_presence_confirmed_ = true;
         }
       });
+      last_presence_confirmed_ = true;
       return true;
     } catch (const std::exception& e) {
+      last_presence_confirmed_ = false;
       std::cerr << "[DiscordRpcManager] UpdatePresence exception: " << e.what() << std::endl;
       return false;
     }
 #else
-    return true;
+    last_presence_confirmed_ = HasActiveDiscordIpcPipe();
+    return last_presence_confirmed_.load();
 #endif
   }
 
   bool ClearPresence() {
+    last_presence_confirmed_ = false;
     if (!is_initialized_) return false;
 #if HAS_DISCORD_SDK
     if (!client_) return false;
     client_->ClearRichPresence();
 #endif
     return true;
+  }
+
+  bool IsPresenceConfirmed() const {
+    return is_initialized_ && last_presence_confirmed_.load() && HasActiveDiscordIpcPipe();
   }
 
   void Dispose() {
@@ -213,6 +251,10 @@ bool DiscordRpcManager::UpdatePresence(const flutter::EncodableMap& data) {
 
 bool DiscordRpcManager::ClearPresence() {
   return impl_->ClearPresence();
+}
+
+bool DiscordRpcManager::IsPresenceConfirmed() const {
+  return impl_->IsPresenceConfirmed();
 }
 
 void DiscordRpcManager::Dispose() {

@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:resonance/core/domain/models/media_item.dart';
 import '../../application/lyrics_provider.dart';
-import '../../../player/application/providers/audio_provider.dart';
 
 import 'package:resonance/core/utils/uicons.dart';
 import 'package:resonance/core/providers/overlay_provider.dart';
@@ -32,7 +31,7 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
     final lyricsState = ref.watch(lyricsProvider);
     final translationState = ref.watch(lyricsTranslationProvider);
     final lyrics = ref.watch(displayLyricsProvider);
-    final track = ref.watch(audioProvider.select((s) => s.currentTrack));
+    final track = ref.watch(activeOverlayTrackProvider);
 
     // 1. Determine Content based on state
     Widget content;

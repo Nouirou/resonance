@@ -16,6 +16,8 @@ import 'package:resonance/features/player/presentation/widgets/mini_player/share
 import 'package:resonance/features/settings/presentation/widgets/preferences/sleep_timer_countdown_text.dart';
 import 'package:resonance/features/library/application/blocked_tracks_provider.dart';
 import 'package:resonance/features/player/utils/media_action_utils.dart';
+import 'package:resonance/features/connect/application/connect_client_notifier.dart';
+import 'package:resonance/features/connect/presentation/sheets/connect_devices_sheet.dart';
 
 class MediaActionsBottomSheet extends ConsumerWidget {
   const MediaActionsBottomSheet({
@@ -212,6 +214,7 @@ class _TrackQuickActionBar extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
+    final isSingleRemote = ref.watch(isDockedBarRemoteProvider);
 
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
@@ -230,7 +233,9 @@ class _TrackQuickActionBar extends ConsumerWidget {
             label: 'Play',
             onTap: () {
               Navigator.pop(context);
-              if (item.isStreaming) {
+              if (isSingleRemote) {
+                ref.read(connectClientProvider.notifier).playTrackOnRemote(item);
+              } else if (item.isStreaming) {
                 ref.read(audioProvider.notifier).playYouTubeTrack(item);
               } else {
                 ref.read(audioProvider.notifier).playTrack(item);
@@ -242,7 +247,11 @@ class _TrackQuickActionBar extends ConsumerWidget {
             label: 'Play Next',
             onTap: () {
               Navigator.pop(context);
-              ref.read(audioProvider.notifier).playNext(item);
+              if (isSingleRemote) {
+                ref.read(connectClientProvider.notifier).playNextOnRemote(item);
+              } else {
+                ref.read(audioProvider.notifier).playNext(item);
+              }
             },
           ),
           _QuickActionButton(
@@ -250,7 +259,11 @@ class _TrackQuickActionBar extends ConsumerWidget {
             label: 'Queue',
             onTap: () {
               Navigator.pop(context);
-              ref.read(audioProvider.notifier).addToQueue(item);
+              if (isSingleRemote) {
+                ref.read(connectClientProvider.notifier).addToRemoteQueue(item);
+              } else {
+                ref.read(audioProvider.notifier).addToQueue(item);
+              }
             },
           ),
           _QuickActionButton(
@@ -358,6 +371,43 @@ class _TrackBentoActions extends ConsumerWidget {
         ),
         const SizedBox(height: 8),
 
+        // Group: Resonance Connect (Devices)
+        Consumer(
+          builder: (context, ref, _) {
+            final clientState = ref.watch(connectClientProvider);
+            final isRemote = clientState.isActiveRemote;
+            final remoteName = clientState.remoteSync?.hostName ??
+                clientState.activeDevice?.name;
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: isRemote
+                        ? theme.colorScheme.primary.withValues(alpha: 0.35)
+                        : Colors.white.withValues(alpha: 0.05),
+                  ),
+                ),
+                child: _ActionCardRow(
+                  icon: UIcons.regular.devices,
+                  iconColor: isRemote ? theme.colorScheme.primary : null,
+                  title: 'Resonance Connect',
+                  titleColor: isRemote ? theme.colorScheme.primary : null,
+                  subtitle: isRemote && remoteName != null
+                      ? 'Controlling $remoteName'
+                      : 'Connect to Desktop or manage remotes',
+                  subtitleColor: isRemote ? theme.colorScheme.primary : null,
+                  onTap: () {
+                    Navigator.pop(context);
+                    ConnectDevicesSheet.show(context);
+                  },
+                ),
+              ),
+            );
+          },
+        ),
         // Group: Sleep timer
         if (item.type != 'playlist') ...[
           Consumer(

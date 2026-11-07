@@ -20,6 +20,7 @@ import '../../../playlist/application/playlist_auto_continue_provider.dart';
 import '../../../library/application/blocked_tracks_provider.dart';
 import 'session_history_tracker.dart';
 import '../../../explore/application/services/user_taste_profile_service.dart';
+import '../../../connect/application/connect_server_notifier.dart';
 
 /// It decouples orthogonal logic (Sync, Tracking, Maintenance) from the core 
 /// AudioNotifier using the Riverpod pattern.
@@ -58,6 +59,9 @@ class AudioOrchestrator {
     _ref.read(playbackRestorationServiceProvider).restoreSession(notifier);
 
     // 3. Reactive Listeners (The Glue)
+    if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+      _ref.read(connectServerProvider);
+    }
     _setupReactiveListeners();
   }
 

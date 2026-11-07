@@ -24,6 +24,7 @@ import 'package:resonance/features/player/application/services/audio_orchestrato
 import 'package:resonance/features/player/presentation/screens/now_playing_screen.dart';
 import 'package:resonance/features/player/presentation/screens/queue_screen.dart';
 import 'package:resonance/features/player/presentation/widgets/mini_player/docked/docked_mini_player.dart';
+import 'package:resonance/features/connect/presentation/widgets/slideable_remote_mini_player.dart';
 import 'package:resonance/features/home/presentation/providers/home_navigation_provider.dart';
 import 'package:resonance/features/library/presentation/widgets/morphing_library_bar.dart';
 import 'package:resonance/features/playlist/application/playlist_provider.dart';
@@ -218,101 +219,128 @@ class _MainDashboardState extends ConsumerState<MainDashboard> {
                 child: CustomTitleBar(nowPlayingTitle: nowPlayingTitle),
               ),
             Expanded(
-              child: Row(
-                children: [
-                  if (isWideLayout)
-                    RepaintBoundary(
-                      child: SafeArea(
-                        top: !isDesktopOs,
-                        bottom: false,
-                        right: false,
-                        child: const LeftSidebar(),
+              child: SafeArea(
+                top: !isDesktopOs && isWideLayout,
+                bottom: false,
+                child: Row(
+                  children: [
+                    if (isWideLayout)
+                      const RepaintBoundary(
+                        child: SafeArea(
+                          top: false,
+                          bottom: false,
+                          right: false,
+                          child: LeftSidebar(),
+                        ),
                       ),
-                    ),
 
-                  // Main Content area (Floating card on wide canvas)
-                  Expanded(
-                    child: RepaintBoundary(
-                      child: Container(
-                        margin: isWideLayout
-                            ? const EdgeInsets.fromLTRB(8, 12, 12, 12)
-                            : EdgeInsets.zero,
-                        decoration: isWideLayout
-                            ? BoxDecoration(
-                                color: Theme.of(context).brightness == Brightness.dark
-                                    ? const Color(0xFF15181E)
-                                    : const Color(0xFFF5F6FC),
-                                borderRadius: BorderRadius.circular(24),
-                                border: Border.all(
-                                  color: Theme.of(context).brightness == Brightness.dark
-                                      ? Colors.white.withValues(alpha: 0.06)
-                                      : Colors.black.withValues(alpha: 0.04),
-                                  width: 1,
-                                ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withValues(
-                                      alpha: Theme.of(context).brightness == Brightness.dark ? 0.25 : 0.04,
-                                    ),
-                                    blurRadius: 12,
-                                    offset: const Offset(0, 4),
+                    // Main Content area (Floating card on wide canvas)
+                    Expanded(
+                      child: RepaintBoundary(
+                        child: Container(
+                          margin: isWideLayout
+                              ? EdgeInsets.fromLTRB(
+                                  8,
+                                  isDesktopOs ? 12 : 4,
+                                  12,
+                                  12,
+                                )
+                              : EdgeInsets.zero,
+                          decoration: isWideLayout
+                              ? BoxDecoration(
+                                  color: Theme.of(context).brightness ==
+                                          Brightness.dark
+                                      ? const Color(0xFF15181E)
+                                      : const Color(0xFFF5F6FC),
+                                  borderRadius: BorderRadius.circular(24),
+                                  border: Border.all(
+                                    color: Theme.of(context).brightness ==
+                                            Brightness.dark
+                                        ? Colors.white.withValues(alpha: 0.06)
+                                        : Colors.black.withValues(alpha: 0.04),
+                                    width: 1,
                                   ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(
+                                        alpha: Theme.of(context).brightness ==
+                                                Brightness.dark
+                                            ? 0.25
+                                            : 0.04,
+                                      ),
+                                      blurRadius: 12,
+                                      offset: const Offset(0, 4),
+                                    ),
+                                  ],
+                                )
+                              : null,
+                          child: ClipRRect(
+                            borderRadius: isWideLayout
+                                ? BorderRadius.circular(24)
+                                : BorderRadius.zero,
+                            child: MediaQuery.removePadding(
+                              context: context,
+                              removeTop: isWideLayout,
+                              removeBottom: isWideLayout,
+                              child: Stack(
+                                children: [
+                                  // 1. Base Layer: Screen Navigation (IndexedStack keeps all tabs alive)
+                                  RepaintBoundary(
+                                    child: TickerMode(
+                                      enabled: !(showNowPlaying ||
+                                          showLyrics ||
+                                          showQueue),
+                                      child: _ScreenNavigationLayer(
+                                        isDesktopOs: isDesktopOs,
+                                        isWideLayout: isWideLayout,
+                                        logicalIndex: logicalIndex,
+                                        screens: _getScreens(isWideLayout),
+                                      ),
+                                    ),
+                                  ),
+
+                                  // 2. Mid Layer: Now Playing (Slide transition)
+                                  _NowPlayingSlideLayer(
+                                    showNowPlaying: showNowPlaying,
+                                  ),
+
+                                  // 3. Top Layer: Lyrics Overlay
+                                  _LyricsOverlayLayer(showLyrics: showLyrics),
+
+                                  // 4. Top Layer: Queue Overlay
+                                  _QueueOverlayLayer(showQueue: showQueue),
+
+                                  // 5. In-App Notification Toast Overlay (Top-Right Floating Banner)
+                                  const NotificationBannerOverlay(),
                                 ],
-                              )
-                            : null,
-                        child: ClipRRect(
-                          borderRadius: isWideLayout
-                              ? BorderRadius.circular(24)
-                              : BorderRadius.zero,
-                          child: Stack(
-                          children: [
-                            // 1. Base Layer: Screen Navigation (IndexedStack keeps all tabs alive)
-                            RepaintBoundary(
-                              child: TickerMode(
-                                enabled: !(showNowPlaying || showLyrics || showQueue),
-                                child: _ScreenNavigationLayer(
-                                  isDesktopOs: isDesktopOs,
-                                  logicalIndex: logicalIndex,
-                                  screens: _getScreens(isWideLayout),
-                                ),
                               ),
                             ),
-
-                            // 2. Mid Layer: Now Playing (Slide transition)
-                            _NowPlayingSlideLayer(showNowPlaying: showNowPlaying),
-
-                            // 3. Top Layer: Lyrics Overlay
-                            _LyricsOverlayLayer(showLyrics: showLyrics),
-
-                            // 4. Top Layer: Queue Overlay
-                            _QueueOverlayLayer(showQueue: showQueue),
-
-                            // 5. In-App Notification Toast Overlay (Top-Right Floating Banner)
-                            const NotificationBannerOverlay(),
-                          ],
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                ),
 
-                  // Right Sidebar: Persistent Session Queue (Desktop Wide layout)
-                  if (isWideLayout)
-                    const RepaintBoundary(
-                      child: SafeArea(
-                        top: false,
-                        bottom: false,
-                        left: false,
-                        child: RightSidebar(),
+                    // Right Sidebar: Persistent Session Queue (Desktop Wide layout)
+                    if (isWideLayout)
+                      const RepaintBoundary(
+                        child: SafeArea(
+                          top: false,
+                          bottom: false,
+                          left: false,
+                          child: RightSidebar(),
+                        ),
                       ),
-                    ),
-                ],
+                  ],
+                ),
               ),
             ),
-            // Persist the Mini Player at the bottom of the body
-            // On Android, hide it when Now Playing screen is open (NavigationControlCard
-            // already provides full seek + playback controls there).
-            if (!isAndroid || !showNowPlaying) const DockedMiniPlayer(),
+            // Persist the Mini Player at the bottom of the body.
+            // Only hide on compact Android phones when Now Playing is open
+            // (where _AndroidMobileLayout provides its own NavigationControlCard).
+            if (!(isAndroid && !isWideLayout && showNowPlaying))
+              const SlideableRemoteMiniPlayer(),
+            if (!(isAndroid && !isWideLayout && showNowPlaying))
+              const DockedMiniPlayer(),
           ],
         ),
         bottomNavigationBar: isWideLayout ? null : const BottomNavBar(),
@@ -323,11 +351,13 @@ class _MainDashboardState extends ConsumerState<MainDashboard> {
 
 class _ScreenNavigationLayer extends StatelessWidget {
   final bool isDesktopOs;
+  final bool isWideLayout;
   final int logicalIndex;
   final List<Widget> screens;
 
   const _ScreenNavigationLayer({
     required this.isDesktopOs,
+    required this.isWideLayout,
     required this.logicalIndex,
     required this.screens,
   });
@@ -336,7 +366,7 @@ class _ScreenNavigationLayer extends StatelessWidget {
   Widget build(BuildContext context) {
     final safeIndex = logicalIndex.clamp(0, screens.length - 1);
     return SafeArea(
-      top: !isDesktopOs,
+      top: !isDesktopOs && !isWideLayout,
       bottom: false,
       child: IndexedStack(
         index: safeIndex,

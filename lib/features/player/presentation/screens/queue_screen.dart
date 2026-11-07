@@ -6,6 +6,7 @@ import 'package:resonance/core/configs/app_breakpoints.dart';
 import 'package:resonance/core/providers/overlay_provider.dart';
 import 'package:resonance/core/utils/uicons.dart';
 import 'package:resonance/features/library/data/models/media_item.dart';
+import 'package:resonance/features/connect/application/connect_client_notifier.dart';
 import 'package:resonance/features/player/application/providers/audio_provider.dart';
 import 'package:resonance/core/widgets/buttons/reusable_hover_icon_button.dart';
 import '../widgets/queue/queue_header_bar.dart';
@@ -42,9 +43,21 @@ class _QueueScreenState extends ConsumerState<QueueScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final currentTrack = ref.watch(audioProvider.select((s) => s.currentTrack));
-    final queue = ref.watch(audioProvider.select((s) => s.queue));
-    final currentIndex = ref.watch(audioProvider.select((s) => s.currentIndex));
+    final isRemoteTarget = ref.watch(isOverlayRemoteTargetProvider);
+    final localTrack = ref.watch(audioProvider.select((s) => s.currentTrack));
+    final localQueue = ref.watch(audioProvider.select((s) => s.queue));
+    final localIndex = ref.watch(audioProvider.select((s) => s.currentIndex));
+
+    final remoteSync = ref.watch(
+      connectClientProvider.select((s) => s.remoteSync),
+    );
+
+    final currentTrack =
+        isRemoteTarget ? remoteSync?.currentTrack : localTrack;
+    final queue =
+        isRemoteTarget ? (remoteSync?.queue ?? const <MediaItem>[]) : localQueue;
+    final currentIndex =
+        isRemoteTarget ? (remoteSync?.currentIndex ?? -1) : localIndex;
     final theme = Theme.of(context);
     final isLight = theme.brightness == Brightness.light;
     final isCompact = AppBreakpoints.isCompact(context);
@@ -88,7 +101,9 @@ class _QueueScreenState extends ConsumerState<QueueScreen> {
                 QueueHeaderBar(
                   totalUpcoming: upcomingList.length,
                   onClose: () => ref.read(queueOverlayProvider.notifier).setVisible(false),
-                  onClearUpcoming: () => ref.read(audioProvider.notifier).clearUpcomingQueue(),
+                  onClearUpcoming: () => isRemoteTarget
+                      ? ref.read(connectClientProvider.notifier).clearUpcomingQueue()
+                      : ref.read(audioProvider.notifier).clearUpcomingQueue(),
                 ),
 
                 Expanded(
@@ -210,10 +225,18 @@ class _QueueScreenState extends ConsumerState<QueueScreen> {
                                         index: index,
                                         isHistory: true,
                                         onTap: () {
-                                          ref.read(audioProvider.notifier).jumpToQueueIndex(index);
+                                          if (isRemoteTarget) {
+                                            ref.read(connectClientProvider.notifier).jumpToQueueIndex(index);
+                                          } else {
+                                            ref.read(audioProvider.notifier).jumpToQueueIndex(index);
+                                          }
                                         },
                                         onDelete: () {
-                                          ref.read(audioProvider.notifier).removeTrackFromQueue(index);
+                                          if (isRemoteTarget) {
+                                            ref.read(connectClientProvider.notifier).removeTrackFromQueue(index);
+                                          } else {
+                                            ref.read(audioProvider.notifier).removeTrackFromQueue(index);
+                                          }
                                         },
                                       );
                                     },
@@ -372,7 +395,11 @@ class _QueueScreenState extends ConsumerState<QueueScreen> {
                                 onReorderItem: (oldIndex, newIndex) {
                                   final realOldIndex = safeCurrentIndex + 1 + oldIndex;
                                   final realNewIndex = safeCurrentIndex + 1 + newIndex;
-                                  ref.read(audioProvider.notifier).reorderQueue(realOldIndex, realNewIndex);
+                                  if (isRemoteTarget) {
+                                    ref.read(connectClientProvider.notifier).reorderQueue(realOldIndex, realNewIndex);
+                                  } else {
+                                    ref.read(audioProvider.notifier).reorderQueue(realOldIndex, realNewIndex);
+                                  }
                                 },
                                 proxyDecorator: (Widget child, int index, Animation<double> animation) {
                                   return AnimatedBuilder(
@@ -410,10 +437,18 @@ class _QueueScreenState extends ConsumerState<QueueScreen> {
                                       index: index,
                                       isHistory: false,
                                       onTap: () {
-                                        ref.read(audioProvider.notifier).jumpToQueueIndex(realIndex);
+                                        if (isRemoteTarget) {
+                                          ref.read(connectClientProvider.notifier).jumpToQueueIndex(realIndex);
+                                        } else {
+                                          ref.read(audioProvider.notifier).jumpToQueueIndex(realIndex);
+                                        }
                                       },
                                       onDelete: () {
-                                        ref.read(audioProvider.notifier).removeTrackFromQueue(realIndex);
+                                        if (isRemoteTarget) {
+                                          ref.read(connectClientProvider.notifier).removeTrackFromQueue(realIndex);
+                                        } else {
+                                          ref.read(audioProvider.notifier).removeTrackFromQueue(realIndex);
+                                        }
                                       },
                                     ),
                                   );

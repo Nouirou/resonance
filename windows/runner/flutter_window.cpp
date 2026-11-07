@@ -365,6 +365,9 @@ bool FlutterWindow::OnCreate() {
         } else if (call.method_name() == "clearPresence") {
           bool ok = DiscordRpcManager::GetInstance().ClearPresence();
           result->Success(flutter::EncodableValue(ok));
+        } else if (call.method_name() == "isPresenceConfirmed") {
+          bool ok = DiscordRpcManager::GetInstance().IsPresenceConfirmed();
+          result->Success(flutter::EncodableValue(ok));
         } else if (call.method_name() == "dispose") {
           DiscordRpcManager::GetInstance().Dispose();
           result->Success(flutter::EncodableValue(true));

@@ -2,6 +2,7 @@ import 'package:resonance/core/widgets/widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:silky_scroll/silky_scroll.dart';
+import 'package:resonance/features/connect/application/connect_client_notifier.dart';
 import 'package:resonance/features/player/application/providers/audio_provider.dart';
 import 'package:resonance/features/lyrics/application/lyrics_provider.dart';
 import 'package:resonance/features/lyrics/application/lyrics_translation_provider.dart';
@@ -160,7 +161,12 @@ class _MiniLyricsCardState extends ConsumerState<MiniLyricsCard> {
   Widget build(BuildContext context) {
     final lyricsState = ref.watch(lyricsProvider);
     final translationState = ref.watch(lyricsTranslationProvider);
-    final track = ref.watch(audioProvider.select((s) => s.currentTrack));
+    final isRemoteTarget = ref.watch(isOverlayRemoteTargetProvider);
+    final localTrack = ref.watch(audioProvider.select((s) => s.currentTrack));
+    final remoteTrack = ref.watch(
+      connectClientProvider.select((s) => s.remoteSync?.currentTrack),
+    );
+    final track = isRemoteTarget ? (remoteTrack ?? localTrack) : localTrack;
     final trackKey = track?.id ?? track?.path;
     return RepaintBoundary(
       child: MouseRegion(
@@ -204,7 +210,6 @@ class _MiniLyricsCardState extends ConsumerState<MiniLyricsCard> {
                 ),
               ],
             ),
-
           ),
         ),
       ),
@@ -218,11 +223,17 @@ class NextInQueueCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final next = ref.watch(audioProvider.select((s) =>
+    final isRemoteActive = ref.watch(isOverlayRemoteTargetProvider);
+    final localNext = ref.watch(audioProvider.select((s) =>
         s.nextTrack ??
         ((s.currentIndex >= 0 && s.currentIndex < s.queue.length - 1)
             ? s.queue[s.currentIndex + 1]
             : null)));
+    final remoteNext = ref.watch(
+      connectClientProvider.select((s) => s.remoteSync?.nextTrack),
+    );
+    final next = isRemoteActive ? (remoteNext ?? localNext) : localNext;
+
     return ClipRRect(
       borderRadius: BorderRadius.circular(16),
       child: Material(
@@ -388,19 +399,44 @@ class _NavigationControlCardState extends ConsumerState<NavigationControlCard> {
   double _prevVolume = 100.0;
   @override
   Widget build(BuildContext context) {
-    final volume = ref.watch(audioProvider.select((s) => s.volume));
-    final isPlaying = ref.watch(audioProvider.select((s) => s.isPlaying));
-    final isLoading = ref.watch(audioProvider.select((s) => s.isLoading));
-    final isShuffleEnabled =
+    final isRemoteActive = ref.watch(isOverlayRemoteTargetProvider);
+    final remoteSync = ref.watch(
+      connectClientProvider.select((s) => s.remoteSync),
+    );
+
+    final localVolume = ref.watch(audioProvider.select((s) => s.volume));
+    final localIsPlaying = ref.watch(audioProvider.select((s) => s.isPlaying));
+    final localIsLoading = ref.watch(audioProvider.select((s) => s.isLoading));
+    final localIsShuffleEnabled =
         ref.watch(audioProvider.select((s) => s.isShuffleEnabled));
-    final loopMode = ref.watch(audioProvider.select((s) => s.loopMode));
-    final isPreviousDisabled =
+    final localLoopMode = ref.watch(audioProvider.select((s) => s.loopMode));
+    final localIsPreviousDisabled =
         ref.watch(audioProvider.select((s) => s.currentIndex <= 0));
-    final isNextDisabled = ref.watch(audioProvider.select(
+    final localIsNextDisabled = ref.watch(audioProvider.select(
       (s) => s.currentIndex >= s.queue.length - 1 && s.loopMode == LoopMode.off,
     ));
 
+    final volume = isRemoteActive ? (remoteSync?.volume ?? 100.0) : localVolume;
+    final isPlaying =
+        isRemoteActive ? (remoteSync?.isPlaying ?? false) : localIsPlaying;
+    final isLoading =
+        isRemoteActive ? (remoteSync?.isLoading ?? false) : localIsLoading;
+    final isShuffleEnabled = isRemoteActive
+        ? (remoteSync?.isShuffleEnabled ?? false)
+        : localIsShuffleEnabled;
+    final loopMode =
+        isRemoteActive ? (remoteSync?.loopMode ?? LoopMode.off) : localLoopMode;
+    final isPreviousDisabled = isRemoteActive
+        ? ((remoteSync?.currentIndex ?? 0) <= 0)
+        : localIsPreviousDisabled;
+    final isNextDisabled = isRemoteActive
+        ? ((remoteSync?.currentIndex ?? 0) >=
+                ((remoteSync?.queue.length ?? 1) - 1) &&
+            loopMode == LoopMode.off)
+        : localIsNextDisabled;
+
     final audioNotifier = ref.read(audioProvider.notifier);
+    final connectNotifier = ref.read(connectClientProvider.notifier);
     final isLight = Theme.of(context).brightness == Brightness.light;
 
     final decoration = widget.isCard
@@ -437,7 +473,21 @@ class _NavigationControlCardState extends ConsumerState<NavigationControlCard> {
               isLoading: isLoading,
               isNextDisabled: isNextDisabled,
               loopMode: loopMode,
-              audioNotifier: audioNotifier,
+              onToggleShuffle: isRemoteActive
+                  ? connectNotifier.toggleShuffle
+                  : audioNotifier.toggleShuffle,
+              onSkipPrevious: isRemoteActive
+                  ? connectNotifier.skipToPrevious
+                  : audioNotifier.skipToPrevious,
+              onTogglePlayPause: isRemoteActive
+                  ? connectNotifier.togglePlayPause
+                  : audioNotifier.togglePlayPause,
+              onSkipNext: isRemoteActive
+                  ? connectNotifier.skipToNext
+                  : audioNotifier.skipToNext,
+              onCycleLoopMode: isRemoteActive
+                  ? connectNotifier.cycleLoopMode
+                  : audioNotifier.cycleLoopMode,
               isLargePlayButton: widget.isLargePlayButton,
             ),
             if (widget.showVolumeSlider) ...[
@@ -445,17 +495,22 @@ class _NavigationControlCardState extends ConsumerState<NavigationControlCard> {
               _VolumeSliderRow(
                 volume: volume,
                 onVolumeChanged: (v) {
-                  audioNotifier.setVolume(v);
+                  if (isRemoteActive) {
+                    connectNotifier.setVolume(v);
+                  } else {
+                    audioNotifier.setVolume(v);
+                  }
                   if (v > 0) _prevVolume = v;
                 },
                 onMuteToggle: () {
-                  if (volume > 0) {
-                    _prevVolume = volume;
-                    audioNotifier.setVolume(0);
+                  final targetVol = volume > 0
+                      ? 0.0
+                      : (_prevVolume > 0 ? _prevVolume : 100.0);
+                  if (volume > 0) _prevVolume = volume;
+                  if (isRemoteActive) {
+                    connectNotifier.setVolume(targetVol);
                   } else {
-                    audioNotifier.setVolume(
-                      _prevVolume > 0 ? _prevVolume : 100,
-                    );
+                    audioNotifier.setVolume(targetVol);
                   }
                 },
               ),
@@ -468,16 +523,27 @@ class _NavigationControlCardState extends ConsumerState<NavigationControlCard> {
 }
 
 /// Seek slider row with position / duration timestamps.
-/// Consumes [audioProvider] directly so it rebuilds every tick,
+/// Consumes [audioProvider] (or [connectClientProvider] in remote mode) directly so it rebuilds every tick,
 /// keeping it isolated from the rest of the card.
 class _SeekSliderRow extends ConsumerWidget {
   const _SeekSliderRow();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final pos = ref.watch(audioProvider.select((s) => s.position));
-    final dur = ref.watch(audioProvider.select((s) => s.duration));
-    final audioNotifier = ref.read(audioProvider.notifier);
+    final isRemoteActive = ref.watch(isOverlayRemoteTargetProvider);
+    final localPos = ref.watch(audioProvider.select((s) => s.position));
+    final localDur = ref.watch(audioProvider.select((s) => s.duration));
+    final remotePos = ref.watch(
+      connectClientProvider.select((s) => s.interpolatedPosition),
+    );
+    final remoteDur = ref.watch(
+      connectClientProvider.select(
+        (s) => s.remoteSync?.duration ?? Duration.zero,
+      ),
+    );
+
+    final pos = isRemoteActive ? remotePos : localPos;
+    final dur = isRemoteActive ? remoteDur : localDur;
     final colorScheme = Theme.of(context).colorScheme;
     final labelStyle = TextStyle(
       fontSize: 11,
@@ -498,7 +564,12 @@ class _SeekSliderRow extends ConsumerWidget {
             height: 28,
             onChanged: (_) {},
             onChangeEnd: (val) {
-              audioNotifier.seek(Duration(milliseconds: val.toInt()));
+              final target = Duration(milliseconds: val.toInt());
+              if (isRemoteActive) {
+                ref.read(connectClientProvider.notifier).seek(target);
+              } else {
+                ref.read(audioProvider.notifier).seek(target);
+              }
             },
           ),
           Padding(
@@ -588,7 +659,11 @@ class _PlaybackActionButtonsRow extends StatelessWidget {
   final bool isLoading;
   final bool isNextDisabled;
   final LoopMode loopMode;
-  final AudioNotifier audioNotifier;
+  final VoidCallback onToggleShuffle;
+  final VoidCallback onSkipPrevious;
+  final VoidCallback onTogglePlayPause;
+  final VoidCallback onSkipNext;
+  final VoidCallback onCycleLoopMode;
   final bool isLargePlayButton;
 
   const _PlaybackActionButtonsRow({
@@ -598,7 +673,11 @@ class _PlaybackActionButtonsRow extends StatelessWidget {
     required this.isLoading,
     required this.isNextDisabled,
     required this.loopMode,
-    required this.audioNotifier,
+    required this.onToggleShuffle,
+    required this.onSkipPrevious,
+    required this.onTogglePlayPause,
+    required this.onSkipNext,
+    required this.onCycleLoopMode,
     this.isLargePlayButton = false,
   });
 
@@ -618,14 +697,14 @@ class _PlaybackActionButtonsRow extends StatelessWidget {
           color: isShuffleEnabled
               ? theme.primaryColor
               : colorScheme.onSurface.withValues(alpha: 0.7),
-          onTap: audioNotifier.toggleShuffle,
+          onTap: onToggleShuffle,
         ),
         ReusableHoverIconButton(
           tooltip: 'Previous',
           icon: UIcons.regular.step_backward,
           iconSize: 32,
           isDisabled: isPreviousDisabled,
-          onTap: audioNotifier.skipToPrevious,
+          onTap: onSkipPrevious,
           color: colorScheme.onSurface.withValues(alpha: 0.8),
         ),
         PlayPauseButton(
@@ -635,14 +714,14 @@ class _PlaybackActionButtonsRow extends StatelessWidget {
           customIconSize: isLargePlayButton ? 38.0 : null,
           customPadding: isLargePlayButton ? 12.0 : null,
           color: theme.primaryColor,
-          onTap: audioNotifier.togglePlayPause,
+          onTap: onTogglePlayPause,
         ),
         ReusableHoverIconButton(
           tooltip: 'Next',
           icon: UIcons.regular.step_forward,
           iconSize: 32,
           isDisabled: isNextDisabled,
-          onTap: audioNotifier.skipToNext,
+          onTap: onSkipNext,
           color: colorScheme.onSurface.withValues(alpha: 0.8),
         ),
         ReusableHoverIconButton(
@@ -659,7 +738,7 @@ class _PlaybackActionButtonsRow extends StatelessWidget {
           color: loopMode != LoopMode.off
               ? theme.primaryColor
               : colorScheme.onSurface.withValues(alpha: 0.7),
-          onTap: audioNotifier.cycleLoopMode,
+          onTap: onCycleLoopMode,
         ),
       ],
     );
@@ -738,4 +817,3 @@ class _VolumeSliderRow extends StatelessWidget {
     );
   }
 }
-

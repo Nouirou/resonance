@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:resonance/core/utils/uicons.dart';
+import 'package:resonance/features/connect/application/connect_client_notifier.dart';
 import 'package:resonance/features/player/application/providers/audio_provider.dart';
 
 class VolumePopupDialog extends ConsumerWidget {
@@ -43,7 +44,12 @@ class VolumePopupDialog extends ConsumerWidget {
 
     double top = buttonOffset.dy - dialogHeight - 16;
 
-    final double currentVolume = ref.watch(audioProvider.select((s) => s.volume));
+    final isRemoteActive = ref.watch(isRemoteControlActiveProvider);
+    final localVol = ref.watch(audioProvider.select((s) => s.volume));
+    final remoteVol = ref.watch(
+      connectClientProvider.select((s) => s.remoteSync?.volume ?? 100.0),
+    );
+    final double currentVolume = isRemoteActive ? remoteVol : localVol;
 
     return Stack(
       children: [
@@ -67,7 +73,11 @@ class VolumePopupDialog extends ConsumerWidget {
                 child: _VolumePopupSliderRow(
                   currentVolume: currentVolume,
                   onVolumeChanged: (val) {
-                    ref.read(audioProvider.notifier).setVolume(val);
+                    if (isRemoteActive) {
+                      ref.read(connectClientProvider.notifier).setVolume(val);
+                    } else {
+                      ref.read(audioProvider.notifier).setVolume(val);
+                    }
                   },
                 ),
               ),
@@ -125,15 +135,15 @@ class _VolumePopupSliderRow extends StatelessWidget {
           ),
           const SizedBox(width: 12),
           SizedBox(
-            width: 44,
+            width: 32,
             child: Text(
-              "${currentVolume.toInt()}%",
-              softWrap: false,
+              '${currentVolume.toInt()}%',
               style: TextStyle(
-                color: theme.colorScheme.onSurface,
-                fontSize: 13,
+                fontSize: 12,
+                color: theme.colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.w600,
               ),
-              textAlign: TextAlign.right,
+              textAlign: TextAlign.end,
             ),
           ),
         ],
@@ -141,4 +151,3 @@ class _VolumePopupSliderRow extends StatelessWidget {
     );
   }
 }
-

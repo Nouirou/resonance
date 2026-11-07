@@ -13,7 +13,7 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 BUNDLE_DIR="${1:-$PROJECT_ROOT/build/linux/x64/release/bundle}"
 OUTPUT_DIR="${2:-$PROJECT_ROOT/Output}"
 
-if [ ! -d "$BUNDLE_DIR" ]; then
+if [[ ! -d "$BUNDLE_DIR" ]]; then
   echo "Error: Release bundle not found at: $BUNDLE_DIR"
   echo "Run 'flutter build linux --release' first."
   exit 1
@@ -24,7 +24,7 @@ PUBSPEC="$PROJECT_ROOT/pubspec.yaml"
 RAW_VER=$(grep -m 1 '^version:' "$PUBSPEC" | awk '{print $2}')
 BASE_VER=$(echo "$RAW_VER" | cut -d'+' -f1 | sed 's/-beta//g')
 BUILD_NUM=$(echo "$RAW_VER" | cut -d'+' -f2)
-if [ -z "$BUILD_NUM" ]; then BUILD_NUM="1"; fi
+if [[ -z "$BUILD_NUM" ]]; then BUILD_NUM="1"; fi
 DEB_VERSION="${BASE_VER}-${BUILD_NUM}"
 
 mkdir -p "$OUTPUT_DIR"
@@ -51,7 +51,7 @@ cp -r "$BUNDLE_DIR/"* "$STAGING_DIR/opt/resonance/"
 
 # Ensure executable bits
 chmod 755 "$STAGING_DIR/opt/resonance/resonance_app"
-if [ -f "$STAGING_DIR/opt/resonance/resonance_downloader" ]; then
+if [[ -f "$STAGING_DIR/opt/resonance/resonance_downloader" ]]; then
   chmod 755 "$STAGING_DIR/opt/resonance/resonance_downloader"
 fi
 
@@ -79,7 +79,7 @@ chmod 644 "$STAGING_DIR/usr/share/applications/resonance.desktop"
 
 # 4. Copy Application Icon
 ICON_SRC="$PROJECT_ROOT/assets/icons/app_icon.png"
-if [ -f "$ICON_SRC" ]; then
+if [[ -f "$ICON_SRC" ]]; then
   cp "$ICON_SRC" "$STAGING_DIR/usr/share/icons/hicolor/256x256/apps/resonance.png"
   chmod 644 "$STAGING_DIR/usr/share/icons/hicolor/256x256/apps/resonance.png"
 fi
